@@ -1,678 +1,951 @@
-// lib.article
+// NDC.ArticleView
 
 const {
-  mainStateUpdate,
-  isTest,
-  stateUpdate,
-  functionsToCallByLibrary,
-  callLibs,
-  baseAction,
-  kanbanColumns,
   widgets,
-  usersSBTs,
+  isTest,
+  handleFilterArticles,
+  articleToRenderData,
+  authorForWidget,
+  handleEditArticle,
+  handleDeleteArticle,
+  handleShareButton,
+  callLibs,
+  baseActions,
+  kanbanColumns,
+  sharedCommentId,
+  allArticlesWithThisSBT,
+  sbtWhiteList,
+  categories,
 } = props;
 
-const libName = "article"; // EDIT: set lib name
-const functionsToCall = functionsToCallByLibrary[libName];
+if (!callLibs) {
+  callLibs = () => {};
+}
 
-let resultFunctionsToCallByLibrary = Object.assign(
-  {},
-  functionsToCallByLibrary
+const accountId = articleToRenderData.author;
+const id =
+  articleToRenderData.id ??
+  `${articleToRenderData.author}-${articleToRenderData.timeCreate}`;
+
+if (
+  !Array.isArray(articleToRenderData.tags) &&
+  typeof articleToRenderData.tags === "object"
+) {
+  articleToRenderData.tags = Object.keys(articleToRenderData.tags);
+}
+
+articleToRenderData.tags = articleToRenderData.tags.filter(
+  (tag) => tag !== undefined && tag !== null
 );
-let resultFunctionsToCall = [];
 
-const currentVersion = "0.0.2"; // EDIT: Set version
+//For the moment we'll allways have only 1 sbt in the array. If this change remember to do the propper work in lib.SBT and here.
+const articleSbts = articleToRenderData.sbts ?? [];
 
-const prodAction = `${baseAction}_v${currentVersion}`;
-const testAction = `test_${prodAction}`;
-const versionsBaseActions = isTest ? `test_${baseAction}` : baseAction;
-const action = isTest ? testAction : prodAction;
-// START LIB CALLS SECTION
-// interface FunctionCall {
-//     functionName: string,
-//     key: string, // The state of the caller will be updated with this string as a key
-//     props: Record<string, any> // function parameters as object
-// }
+const libSrcArray = [widgets.libs.libComment];
 
-// type LibsCalls = Record<string, FunctionCall> // Key is lib name after lib.
+const tabs = [
+  {
+    id: "generalInfo",
+    title: "Post info",
+    icon: "bi bi-info-circle",
+  },
+];
 
-const libSrcArray = [widgets.libs.libSBT]; // string to lib widget // EDIT: set libs to call
+const initLibsCalls = {
+  comment: [
+    {
+      functionName: "getValidComments",
+      key: "comments",
+      props: { env: undefined, id, articleSbts },
+    },
+    {
+      functionName: "canUserCreateComment",
+      key: "canLoggedUserCreateComment",
+      props: {
+        accountId: context.accountId,
+        sbtsNames: articleSbts,
+      },
+    },
+  ],
+};
 
-const imports = { notifications: ["getNotificationData"] };
-
-const libCalls = {};
-libSrcArray.forEach((libSrc) => {
-  const libName = libSrc.split("lib.")[1];
-  libCalls[libName] = [];
-});
-
+//To slice the article body and show the showMore button just uncoment the sliceContent: true, un the State.init
 State.init({
-  libCalls, // is a LibsCalls object
-  notifications: {},
+  tabSelected: tabs[0].id,
+  comments: [],
+  // sliceContent: true,
+  libsCalls: initLibsCalls,
 });
-// END LIB CALLS SECTION
 
-function log(message) {
-  console.log(`lib.${libName}`, message);
+const canLoggedUserCreateComment = state.canLoggedUserCreateComment;
+
+const timeLastEdit = new Date(articleToRenderData.timeLastEdit);
+
+const CursorPointer = styled.div`
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+  `;
+
+const DetailContent = styled.div`
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  `;
+
+const TagContainer = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 1rem;
+  `;
+
+const HouseTagDiv = styled.div`
+    display: flex;
+    padding: 4px 8px;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    border-radius: 100px;
+    background: var(
+      --gradient-purple-gradient,
+      linear-gradient(90deg, #9333ea 0%, #4f46e5 100%)
+    );
+  `;
+
+const HouseTagText = styled.p`
+    color: #fff;
+    font-size: 7px;
+    font-weight: 500;
+    line-height: 120%;
+    margin: 0px;
+  `;
+
+const TagDiv = styled.div`
+    display: flex;
+    justify-content: center;
+    padding: 4px 8px;
+    align-items: center;
+    gap: 10px;
+    border-radius: 100px;
+    border: solid 1px transparent;
+    border-radius: 80px;
+    background-image: linear-gradient(#eae5f7, #eae5f7),
+      radial-gradient(circle at top left, #9333ea 0%, #4f46e5 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+  `;
+
+const TagDivText = styled.p`
+    font-size: 8px;
+    margin: 0px;
+    font-weight: 500;
+    line-height: 120%;
+    background: linear-gradient(90deg, #9333ea 0%, #4f46e5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-fill-color: transparent;
+  `;
+
+const NominationTitleContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  `;
+
+const NominationTitle = styled.p`
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin: 7px 0 0 0;
+    color: #000;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 120%;
+  `;
+const UserLink = styled.a`
+    cursor: pointer;
+    &:hover {
+      text-decoration: none;
+    }
+  `;
+const NominationUser = styled.p`
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: #828688;
+    margin: 0 0 7px 0;
+    font-size: 14px;
+    line-height: 120%;
+  `;
+
+const UpvoteButtonDisabled = styled.button`
+    display: flex;
+    padding: 2px 12px;
+    align-items: center;
+    gap: 6px;
+    border-radius: 4px;
+    border: solid 1px transparent;
+    background: var(--buttons-disable, #c3cace);
+    cursor: default !important;
+  `;
+
+const UpvoteButton = styled.button`
+    display: flex;
+    padding: 2px 12px;
+    align-items: center;
+    gap: 6px;
+    border-radius: 4px;
+    border: solid 1px transparent;
+    background-image: linear-gradient(#f8f8f9, #f8f8f9),
+      radial-gradient(
+        circle at left top,
+        rgb(147, 51, 234) 0%,
+        rgb(79, 70, 229) 100%
+      );
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+  `;
+
+const UpvoteCount = styled.p`
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 24px;
+    margin: 0px;
+    background: linear-gradient(90deg, #9333ea 0%, #4f46e5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-fill-color: transparent;
+  `;
+
+const Icon = styled.img`
+    width: 17px;
+    height: 17px;
+  `;
+const BodyContainer = styled.div`
+    border-radius: 8px;
+    margin: 10px 0;
+    background: #F8F8F9;
+    padding: 20px;
+  `;
+
+const PlatformCard = styled.div`
+    display: flex;
+    border-radius: 6px;
+    background: background: "rgb(255 255 255 / 0%);
+  `;
+
+const PlatformContent = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+  `;
+
+const PlatformInfoDiv = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  `;
+
+const PlatformInfoHeader = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  `;
+
+const PlatInforHeadText = styled.p`
+    margin: 0px;
+    color: var(--000000, #000);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 120%;
+  `;
+
+const CategoryContainer = styled.div`
+  margin-top: 1rem;
+  margin-left: 1rem;
+  `;
+
+function getArticleCategoryColor() {
+  const articleCategory = categories.filter(
+    (cat) => cat.value === articleToRenderData.category
+  );
+
+  return articleCategory.color;
 }
 
-function logError(message) {
-  console.error(`lib.${libName}`, message);
-}
+const CategoryColorIndicator = styled.i`
+  color: ${getArticleCategoryColor()};
+  margin-right: 0.3rem;
+`;
 
-function libStateUpdate(obj) {
+const CategoryText = styled.span`
+    font-style: normal;
+    font-size: 12px;
+    line-height: 120%;
+    margin-bottom: 0;
+`;
+
+const PlatInfoHeadSeparator = styled.hr`
+    height: 0px;
+    margin: 8px 0 0 0;
+  
+    border: 1px solid rgba(208, 214, 217, 1);
+  `;
+
+const KeyIssuesContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  `;
+
+const KeyIssueTitle = styled.p`
+    font-size: 12px;
+    line-height: 120%;
+    margin: 0px;
+    font-weight: 500;
+    line-height: 18px;
+    text-align: left;
+    padding: 10px;
+  `;
+
+const KeyIssueDescription = styled.p`
+    color: #212427;
+    font-size: 12px;
+    line-height: 130%;
+    margin: 0px;
+    padding: 10px;
+    line-height: 18px;
+    text-align: justify;
+  `;
+
+const CandidateCard = styled.div`
+    display: flex;
+    padding: 20px;
+    align-items: center;
+    align-self: stretch;
+    border-radius: 6px;
+    background: #fff;
+  `;
+
+const CandidateContent = styled.div`
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 12px;
+  `;
+
+const ContentHeader = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    align-self: stretch;
+  `;
+
+const ContentHeaderText = styled.p`
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0px;
+  `;
+
+const CandidateInfoDiv = styled.div`
+    width: 100%;
+    padding: 16px;
+    background: white;
+    gap: 16px;
+    border-radius: 8px;
+  `;
+
+const CandidateInfoHeader = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: stretch;
+  `;
+
+const CandidateImage = styled.img`
+    width: 32px;
+    height: 32px;
+  `;
+
+const CandidateInfoData = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    flex: 1 0 0;
+  `;
+
+const CandidateTagDiv = styled.div`
+    display: flex;
+    height: 20px;
+    padding: 4px 8px;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    border-radius: 100px;
+    border: 1px solid var(--secondary-warning, #f19d38);
+    background: #f0e1ce;
+  `;
+
+const CandidateTagText = styled.p`
+    color: var(--secondary-warning, #f19d38);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 120%;
+    margin: 0px;
+  `;
+
+const CandidateTime = styled.h6`
+    margin: 3px 0 0 0;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 120%;
+    color: #828688;
+  `;
+
+const CandidateTextInfo = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    align-self: stretch;
+  `;
+
+const SectionTitle = styled.h5`
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 120%;
+    margin: 16px 0 0 0;
+  `;
+
+const SectionDescription = styled.p`
+    font-size: 12px;
+    line-height: 18px;
+    margin: 0px;
+    text-align: justify;
+    color: #828688;
+  `;
+
+const DescriptionSubtitle = styled.h5`
+    display: inline-block;
+    font-size: 12px;
+    line-height: 120%;
+    margin-right: 0.3rem;
+  `;
+
+const DescriptionInfoSpan = styled.span`
+    font-size: 12px;
+    line-height: 18px;
+    margin: 0px;
+    text-align: justify;
+    color: #828688;
+  `;
+
+const DeclarationCard = styled.div`
+    padding: 0px;
+  `;
+
+const CommentSection = styled.div`
+    display: flex;
+    padding: 20px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: 8px;
+    background: #f8f8f9;
+  `;
+
+const Container = styled.div`
+    display: flex;
+    margin-right: 5px;
+    justify-content: center;
+  `;
+
+const SecondContainer = styled.div`
+    background: #F8F8F9;
+    border-radius: 8px;
+    padding: 20px;
+  `;
+
+const H6 = styled.h6`
+    font-size: 14px;
+    margin-bottom: 0;
+  `;
+
+const Tab = styled.div`
+    font-weight: ${(props) => (props.active ? "600" : "500")};
+    border-bottom: 2px solid;
+    border-color: ${(props) =>
+      props.active ? "rgb(68, 152, 224)" : "#dee2e6"};
+    color: ${(props) => (props.active ? "rgb(68, 152, 224)" : "#ababab")};
+    cursor: pointer;
+    padding-bottom: 8px;
+    font-size: 14px;
+  
+    i {
+      &::before {
+        color: ${(props) => (props.active ? "rgb(68, 152, 224)" : "#ababab")};
+      }
+      margin-right: 5px;
+    }
+  `;
+
+const TH = styled.th`
+    border: 1px solid rgba(208, 214, 217, 0.4) !important;
+    text-align: left !important;
+    padding: 15px 20px !important;
+  `;
+
+const CallLibrary = styled.div`
+    display: none;
+  `;
+
+const HeaderButtonsContainer = styled.div`
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  `;
+
+const EditDeleteButtonsContainer = styled.div`
+    display: flex;
+    gap: 0.5rem;
+    `;
+
+const AcordionContainer = styled.div`--bs-accordion-border-width: 0px!important;`;
+
+const NoMargin = styled.div`margin: 0 0.75rem;`;
+
+const AccordionBody = styled.div`padding: 0;`;
+
+//Get basic original comments info
+const rootComments = state.comments.filter(
+  (comment) => comment.value.comment.rootId === id
+);
+
+//Append answers to original comments
+const articleComments = rootComments.map((rootComment) => {
+  let answers = state.comments.filter((comment) => {
+    return comment.value.comment.rootId === rootComment.value.comment.commentId;
+  });
+
+  return {
+    ...rootComment,
+    answers,
+  };
+});
+
+function stateUpdate(obj) {
   State.update(obj);
 }
 
-// START LIB FUNCTIONS: EDIT set functions you need
-function canUserCreateArticle(props) {
-  const { env, accountId, sbtsNames } = props;
+function getUserName() {
+  const profile = data.authorProfile;
 
-  if (accountId) {
-    setAreValidUsers([accountId], sbtsNames);
-  } else {
-    return false;
-  }
-
-  const result = state[`isValidUser-${accountId}`];
-  resultFunctionsToCall = resultFunctionsToCall.filter((call) => {
-    const discardCondition =
-      call.functionName === "canUserCreateArticle" && result !== undefined;
-    return !discardCondition;
-  });
-
-  return result;
+  return profile.name ?? getShortUserName();
 }
 
-function setAreValidUsers(accountIds, sbtsNames) {
-  const newLibsCalls = Object.assign({}, state.libCalls);
-  if (!newLibsCalls.SBT) {
-    logError("Key SBT is not set in lib.", libName);
-  }
+const getShortUserName = () => {
+  const userId = accountId;
 
-  accountIds.forEach((accountId) => {
-    const isCallPushed =
-      newLibsCalls.SBT.find((libCall) => {
-        return (
-          libCall.functionName === "isValidUser" &&
-          libCall.props.accountId === accountId
-        );
-      }) !== undefined;
-    const isCallReturned = state[`isValidUser-${accountId}`] !== undefined;
+  if (userId.length === 64) return `${userId.slice(0, 4)}..${userId.slice(-4)}`;
+  const name = userId.slice(0, -5); // truncate .near
 
-    if (isCallPushed || isCallReturned) {
-      return;
-    }
-
-    const existingUserSBTs = usersSBTs.find(
-      (userSBTs) => userSBTs.user === accountId
-    );
-
-    if (!existingUserSBTs) {
-      newLibsCalls.SBT.push({
-        functionName: "isValidUser",
-        key: `isValidUser-${accountId}`,
-        props: {
-          accountId,
-          sbtsNames,
-        },
-      });
-    }
-  });
-  State.update({ libCalls: newLibsCalls });
-}
-
-function createArticle(props) {
-  const { article, onCommit, onCancel } = props;
-
-  saveHandler(article, onCommit, onCancel);
-
-  resultFunctionsToCall = resultFunctionsToCall.filter((call) => {
-    return call.functionName !== "createArticle";
-  });
-
-  return article;
-}
-
-function deleteArticle(props) {
-  const { article, onCommit, onCancel } = props;
-
-  article.deletedArticle = true;
-
-  saveHandler(article, onCommit, onCancel);
-
-  resultFunctionsToCall = resultFunctionsToCall.filter((call) => {
-    return call.functionName !== "deleteArticle";
-  });
-
-  return article;
-}
-
-const saveHandler = (article, onCommit, onCancel) => {
-  if (article.title && article.body) {
-    const newData = composeData(article);
-
-    Social.set(newData, {
-      force: true,
-      onCommit,
-      onCancel,
-    });
-  } else {
-    logError("Article is missing title or body");
-  }
+  return name.length > 20 ? `${name.slice(0, 20)}...` : name;
 };
 
-function getNotificationData(type, accountId, url) {
-  if (state.notifications.getNotificationData) {
-    return state.notifications.getNotificationData(type, accountId, url);
-  }
-}
-
-function extractMentions(text) {
-  const mentionRegex =
-    /@((?:(?:[a-z\d]+[-_])*[a-z\d]+\.)*(?:[a-z\d]+[-_])*[a-z\d]+)/gi;
-  mentionRegex.lastIndex = 0;
-  const accountIds = new Set();
-  for (const match of text.matchAll(mentionRegex)) {
-    if (
-      !/[\w`]/.test(match.input.charAt(match.index - 1)) &&
-      !/[/\w`]/.test(match.input.charAt(match.index + match[0].length)) &&
-      match[1].length >= 2 &&
-      match[1].length <= 64
-    ) {
-      accountIds.add(match[1].toLowerCase());
-    }
-  }
-  return [...accountIds];
-}
-
-function composeData(article) {
-  let data = {
-    [action]: {
-      main: JSON.stringify(article),
-    },
-    index: {
-      [action]: JSON.stringify({
-        key: "main",
-        value: {
-          type: "md",
-          id: article.id ?? `${context.accountId}-${Date.now()}`,
-        },
-      }),
-    },
-  };
-
-  const mentions = extractMentions(article.body);
-
-  if (mentions.length > 0) {
-    const dataToAdd = getNotificationData(
-      "mention",
-      mentions,
-      `https://near.social/${widgets.thisForum}?sharedArticleId=${article.id}${
-        isTest ? "&isTest=t" : ""
-      }`
-    );
-
-    data.post = dataToAdd.post;
-    data.index.notify = dataToAdd.index.notify;
-  }
-
-  return data;
-}
-
-function getArticleBlackListByBlockHeight() {
-  return [
-    91092435, 91092174, 91051228, 91092223, 91051203, 98372095, 96414482,
-    96412953, 103131250, 106941548,
-  ];
-}
-
-function getArticleBlackListByRealArticleId() {
-  return [
-    "blaze.near-1690410074090",
-    "blaze.near-1690409577184",
-    "blaze.near-1690803928696",
-    "blaze.near-1690803872147",
-    "blaze.near-1690574978421",
-    "f2bc8abdb8ba64fe5aac9689ded9491ff0e6fdcd7a5c680b7cf364142d1789fb-1691703303485",
-    "f2bc8abdb8ba64fe5aac9689ded9491ff0e6fdcd7a5c680b7cf364142d1789fb-1691702619510",
-    "f2bc8abdb8ba64fe5aac9689ded9491ff0e6fdcd7a5c680b7cf364142d1789fb-1691702487944",
-    "f2bc8abdb8ba64fe5aac9689ded9491ff0e6fdcd7a5c680b7cf364142d1789fb-1691707918243",
-    "f2bc8abdb8ba64fe5aac9689ded9491ff0e6fdcd7a5c680b7cf364142d1789fb-1691707889297",
-    "blaze.near-1697211386373",
-    "silkking.near-1696797896796",
-    "silkking.near-1696797784589",
-    "silkking.near-1696797350661",
-    "silkking.near-1696797276482",
-    "silkking.near-1696797155012",
-    "silkking.near-1696796793605",
-    "silkking.near-1696796543546",
-    "silkking.near-1696795954175",
-    "silkking.near-1696794571874",
-    "silkking.near-1696792789177",
-    "zarmade.near-1690578803015",
-  ];
-}
-
-function canUserEditArticle(props) {
-  const { article } = props;
-
-  return article.author === context.accountId;
-}
-
-function getArticlesIndexes(action, subscribe) {
-  return Social.index(action, "main", {
-    order: "desc",
-    subscribe,
-    // limit: 10,
-  });
-}
-
-function filterFakeAuthors(articleData, articleIndexData) {
-  if (articleData.author === articleIndexData.accountId) {
-    return articleData;
-  }
-}
-
-function getArticlesNormalized(env, articleIdToFilter) {
-  const articlesByVersion = Object.keys(versions).map((version, index, arr) => {
-    const action = versions[version].action;
-    const subscribe = index + 1 === arr.length && !articleIdToFilter;
-    const articlesIndexes = getArticlesIndexes(action, subscribe);
-
-    if (!articlesIndexes) return [];
-    const validArticlesIndexes = filterInvalidArticlesIndexes(
-      env,
-      articlesIndexes
-    );
-
-    const validLatestEdits = getLatestEdits(validArticlesIndexes);
-
-    const validFilteredByArticleId = articleIdToFilter
-      ? filterByArticleId(validArticlesIndexes, articleIdToFilter)
-      : undefined;
-
-    const finalArticlesIndexes = validFilteredByArticleId ?? validLatestEdits;
-
-    const articles = finalArticlesIndexes
-      .map((article) => {
-        return filterFakeAuthors(getArticle(article, action), article);
-      })
-      .filter((article) => {
-        return article !== undefined;
-      });
-    return articles;
-  });
-
-  return normalizeLibData(articlesByVersion);
-}
-
-function getArticle(articleIndex, action) {
-  const article = Social.get(
-    `${articleIndex.accountId}/${action}/main`,
-    articleIndex.blockHeight
-  );
-
-  let articleParsed = undefined;
-  if (article) {
-    articleParsed = JSON.parse(article);
-    articleParsed.blockHeight = articleIndex.blockHeight;
-    articleParsed.id = articleIndex.value.id;
-  }
-
-  if (articleParsed) {
-    return articleParsed;
-  }
-}
-
-function filterByArticleId(newFormatArticlesIndexes, articleIdToFilter) {
-  return newFormatArticlesIndexes.filter((articleIndex) => {
-    return articleIndex.value.id === articleIdToFilter;
-  });
-}
-
-function getLatestEdits(newFormatArticlesIndexes) {
-  return newFormatArticlesIndexes.filter((articleIndex) => {
-    const latestEditForThisArticle = newFormatArticlesIndexes.find(
-      (newArticleData) => newArticleData.value.id === articleIndex.value.id
-    );
-    return (
-      JSON.stringify(articleIndex) === JSON.stringify(latestEditForThisArticle)
-    );
-  });
-}
-
-function filterInvalidArticlesIndexes(env, articlesIndexes) {
-  const myArticlesIndexes = articlesIndexes.filter(
-    (articleIndex) => articleIndex.accountId === "kenrou-it.near"
-  );
-
-  return articlesIndexes
-    .filter((articleIndex) => articleIndex.value.id) // Has id
-    .filter((articleIndex) => {
-      const splittedId = articleIndex.value.id.split("-");
-      splittedId.pop();
-
-      return splittedId.join("-") === articleIndex.accountId;
-    }) // id begins with same accountId as index object
-    .filter(
-      (articleIndex) =>
-        !getArticleBlackListByBlockHeight().includes(articleIndex.blockHeight) // Blockheight is not in blacklist
-    )
-    .filter(
-      (articleIndex) =>
-        !getArticleBlackListByRealArticleId().includes(articleIndex.value.id) // Article id is not in blacklist
-    );
-}
-
-function getArticleVersions(props) {
-  const { env, sbtsNames, articleIdToFilter } = props;
-
-  // Call other libs
-  const normArticles = getArticlesNormalized(env, articleIdToFilter);
-
-  const articlesAuthors = normArticles.map((article) => {
-    return article.author;
-  });
-
-  setAreValidUsers(articlesAuthors, sbtsNames);
-
-  resultFunctionsToCall = resultFunctionsToCall.filter((call) => {
-    const discardCondition =
-      call.functionName === "getArticleVersions" &&
-      (state[`isValidUser-${call.props.accountId}`] !== undefined ||
-        usersSBTs.find((userSbt) => {
-          articlesAuthors.includes(userSbt.user);
-        }));
-    return !discardCondition;
-  });
-
-  const finalArticles = filterValidArticles(normArticles);
-
-  return finalArticles;
-}
-
-function getArticles(props) {
-  const { env, sbtsNames } = props;
-
-  // Call other libs
-  const normArticles = getArticlesNormalized(env);
-
-  // Keep last edit from every article
-  const lastEditionArticles = normArticles.filter((article) => {
-    return normArticles.find(
-      (compArticle) => JSON.stringify(compArticle) === JSON.stringify(article)
-    );
-  });
-
-  const articlesAuthors = lastEditionArticles.map((article) => {
-    return article.author;
-  });
-
-  setAreValidUsers(articlesAuthors, sbtsNames);
-
-  resultFunctionsToCall = resultFunctionsToCall.filter((call) => {
-    const discardCondition =
-      call.functionName === "getArticleVersions" &&
-      (state[`isValidUser-${call.props.accountId}`] !== undefined ||
-        usersSBTs.find((userSbt) => {
-          articlesAuthors.includes(userSbt.user);
-        }));
-    return !discardCondition;
-  });
-
-  const finalArticles = filterValidArticles(lastEditionArticles);
-
-  const finalArticlesMapped = {};
-  sbtsNames.forEach((sbtName) => {
-    const sbtArticles = finalArticles.filter((article) => {
-      if (!article.sbts) return false;
-      return article.sbts.indexOf(sbtName) !== -1;
-    });
-    finalArticlesMapped[sbtName] = sbtArticles;
-  });
-
-  return finalArticlesMapped;
-}
-
-function filterValidator(articles) {
-  return articles.filter((article) => {
-    return (
-      article.sbts.find((articleSbt) => {
-        return (
-          state[`isValidUser-${article.author}`][articleSbt] ||
-          articleSbt === "public" ||
-          usersSBTs.find((userSbt) => {
-            return userSbt.user === article.author;
-          }).credentials[articleSbt]
-        );
-      }) !== undefined
-    );
-  });
-}
-
-function filterValidArticles(articles) {
-  let filteredArticles = filterValidator(filteredArticles ?? articles);
-
-  const filteredArticlesWithoutDeletedOnes = filteredArticles.filter(
-    (article) => !article.deletedArticle
-  );
-
-  return filteredArticlesWithoutDeletedOnes;
-}
-
-function filterMultipleKanbanTags(articleTags, kanbanTags) {
-  const normalizedKanbanTag = [];
-  kanbanTags.forEach((tag) => {
-    normalizedKanbanTag.push(tag.replace(` `, "-"));
-  });
-
-  const kanbanTagsInArticleTags = articleTags.filter((tag) =>
-    normalizedKanbanTag.includes(tag.toLowerCase().replace(` `, "-"))
-  );
-
-  const nonKanbanTags = articleTags.filter(
-    (tag) => !normalizedKanbanTag.includes(tag.toLowerCase().replace(` `, "-"))
-  );
-
-  const result = [...nonKanbanTags, kanbanTagsInArticleTags[0]];
-
-  return result;
-}
-
-function normalizeOldToV_0_0_1(article) {
-  article.realArticleId = `${article.author}-${article.timeCreate}`;
-  article.sbts = ["public"];
-
-  return article;
-}
-
-function normalizeFromV0_0_1ToV0_0_2(article) {
-  article.title = article.articleId;
-  article.id = article.realArticleId;
-  if (article.sbts[0] !== "public") {
-    article.sbts[0] = article.sbts[0] + " - class 1";
-  } // There is only one article that is not public and only has class 1
-
-  delete article.articleId;
-  delete article.realArticleId;
-
-  return article;
-}
-
-function normalizeFromV0_0_2ToV0_0_3(article) {
-  if (!Array.isArray(article.tags) && typeof article.tags === "object") {
-    article.tags = Object.keys(article.tags);
-  }
-
-  if (article.tags) {
-    article.tags = article.tags.filter(
-      (tag) => tag !== undefined && tag !== null
-    );
-  } else {
-    article.tags = [];
-  }
-
-  if (kanbanColumns) {
-    const lowerCaseColumns = [];
-    kanbanColumns.forEach((cl) => {
-      lowerCaseColumns.push(cl.toLowerCase());
-    });
-
-    article.tags = filterMultipleKanbanTags(article.tags, lowerCaseColumns);
-  }
-
-  //Add day-month-year tag if it doesn't exists yet
-  const creationDate = new Date(article.timeCreate);
-
-  const dateTag = `${creationDate.getDate()}-${
-    creationDate.getMonth() + 1
-  }-${creationDate.getFullYear()}`;
-
-  if (!article.tags.includes(dateTag)) article.tags.push(dateTag);
-
-  if (article.blockHeight < 105654020 && article.sbts.includes("public")) {
-    article.sbts = ["fractal.i-am-human.near - class 1"];
-  }
-
-  return article;
-}
-
-// END LIB FUNCTIONS
-
-// EDIT: set functions you want to export
-function callFunction(call) {
-  if (call.functionName === "canUserCreateArticle") {
-    return canUserCreateArticle(call.props);
-  } else if (call.functionName === "createArticle") {
-    return createArticle(call.props);
-  } else if (call.functionName === "deleteArticle") {
-    return deleteArticle(call.props);
-  } else if (call.functionName === "canUserEditArticle") {
-    return canUserEditArticle(call.props);
-  } else if (call.functionName === "getArticles") {
-    return getArticles(call.props);
-  } else if (call.functionName === "getArticleVersions") {
-    return getArticleVersions(call.props);
-  }
-}
-
-// EDIT: set versions you want to handle, considering their action to Social.index and the way to transform to one version to another (normalization)
-const versions = {
-  old: {
-    normalizationFunction: normalizeOldToV_0_0_1,
-    action: versionsBaseActions,
-    validBlockHeightRange: [0, 102530777],
-  },
-  "v0.0.1": {
-    normalizationFunction: normalizeFromV0_0_1ToV0_0_2,
-    action: `${versionsBaseActions}_v0.0.1`,
-    validBlockHeightRange: [102530777, 103053147],
-  },
-  "v0.0.2": {
-    normalizationFunction: normalizeFromV0_0_2ToV0_0_3,
-    action: `${versionsBaseActions}_v0.0.2`,
-    validBlockHeightRange: [103053147, undefined],
-  },
-};
-
-function normalizeLibData(libDataByVersion) {
-  let libData;
-
-  Object.keys(versions).forEach((version, index, array) => {
-    const normFn = versions[version].normalizationFunction;
-    const validBlockHeightRange = versions[version].validBlockHeightRange;
-    const normLibData = libDataByVersion[index]
-      .filter((libData) => {
-        if (validBlockHeightRange[1] === undefined) {
-          return true;
-        }
-
-        return (
-          validBlockHeightRange[0] < libData.blockHeight &&
-          libData.blockHeight < validBlockHeightRange[1]
-        );
-      })
-      .map((libData, i) => {
-        if (libData) return normFn(libData);
-      });
-
-    if (index + 1 === array.length) {
-      // Last index
-      libData = normLibData;
-      return;
-    }
-    libDataByVersion[index + 1] =
-      libDataByVersion[index + 1].concat(normLibData);
-  });
-
-  return libData;
-}
-
-if (functionsToCall && functionsToCall.length > 0) {
-  const updateObj = Object.assign({}, functionsToCallByLibrary);
-  resultFunctionsToCall = [...functionsToCall];
-  functionsToCall.forEach((call) => {
-    updateObj[call.key] = callFunction(call);
-  });
-
-  resultFunctionsToCallByLibrary[libName] = resultFunctionsToCall;
-  updateObj.functionsToCallByLibrary = resultFunctionsToCallByLibrary;
-
-  const oldUsersSBTs = usersSBTs;
-  // {
-  //   user: string,
-  //   credentials: {},
-  // }
-
-  const newUsersSBTs = Object.keys(state).map((key) => {
-    if (key.includes("isValidUser-")) {
-      if (state[key] !== undefined) {
-        const user = key.split("isValidUser-")[1];
-        const credentials = state[key];
-
-        const oldUsers = oldUsersSBTs.map((userSbts) => userSbts.user);
-
-        if (!oldUsers.includes(user)) {
-          return {
-            user,
-            credentials,
-          };
-        }
-      }
-    }
-  });
-
-  const finalUsersSBTs = [...oldUsersSBTs, ...newUsersSBTs].filter(
-    (userSBTs) => userSBTs !== undefined
-  );
-
-  if (finalUsersSBTs[0]) {
-    mainStateUpdate({ usersSBTs: finalUsersSBTs });
-  }
-
-  stateUpdate(updateObj);
-}
+let displayedContent = state.sliceContent
+  ? articleToRenderData.body.slice(0, 1000)
+  : articleToRenderData.body;
 
 return (
   <>
-    {libSrcArray.map((src) => {
-      return callLibs(
-        src,
-        libStateUpdate,
-        state.libCalls,
-        {},
-        `lib.${libName}`
-      );
-    })}
+    {sharedCommentId && (
+      <a href={`#${sharedCommentId}`}>
+        Click to redirect to comment that mentioned you
+      </a>
+    )}
 
-    <Widget
-      src={`${widgets.libs.libNotifications}`}
-      props={{
-        stateUpdate: libStateUpdate,
-        imports: imports["notifications"],
-        fatherNotificationsState: state.notifications,
-      }}
-    />
+    <AcordionContainer className="accordion" id="accordionExample">
+      <NoMargin className="accordion-item">
+        <h2 className="accordion-header" id="headingOne">
+          <button
+            className="accordion-button collapsed border border-2"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#collapseOne"
+            aria-expanded="true"
+            aria-controls="collapseOne"
+          >
+            <h6 className="m-0">Show article history</h6>
+          </button>
+        </h2>
+        <div
+          id="collapseOne"
+          className="accordion-collapse collapse"
+          aria-labelledby="headingOne"
+          data-bs-parent="#accordionExample"
+        >
+          <AccordionBody className="accordion-body">
+            <div className="ps-5">
+              <Widget
+                src={widgets.views.editableWidgets.articleHistory}
+                props={{
+                  articleId: articleToRenderData.id,
+                  sbtWhiteList,
+                  isTest,
+                  sbts: articleSbts,
+                  baseActions,
+                  kanbanColumns,
+                  callLibs,
+                  widgets,
+                }}
+              />
+            </div>
+          </AccordionBody>
+        </div>
+      </NoMargin>
+    </AcordionContainer>
+
+    <Container className="mt-1 row">
+      <div className="col-lg-9 col-sm-12">
+        <div className="row" style={{ "margin-inline": "5px" }}>
+          <div
+            className="col-12 p-0 w-100"
+            style={{
+              background: "#F8F8F9",
+              "border-radius": "8px",
+            }}
+          >
+            <div className="w-100 p-3 d-flex flex-wrap justify-content-between align-items-start">
+              <div className="d-flex flex-column w-75">
+                <Widget
+                  src={
+                    widgets.views.standardWidgets.newStyledComponents.Element
+                      .User
+                  }
+                  props={{
+                    accountId,
+                    options: {
+                      showHumanBadge: true,
+                      showImage: true,
+                      showSocialName: true,
+                      shortenLength: 20,
+                      size: "lg",
+                    },
+                  }}
+                />
+                {articleToRenderData.category && (
+                  <CategoryContainer className="d-flex align-items-center">
+                    <CategoryColorIndicator className="bi bi-square-fill"></CategoryColorIndicator>
+                    <CategoryText>{articleToRenderData.category}</CategoryText>
+                  </CategoryContainer>
+                )}
+                <TagContainer>
+                  {articleToRenderData.tags.length > 0 &&
+                    articleToRenderData.tags.map((tag) => {
+                      const filter = { filterBy: "tag", value: tag };
+                      return (
+                        <CursorPointer
+                          onClick={() => handleFilterArticles(filter)}
+                        >
+                          <Widget
+                            src={
+                              widgets.views.standardWidgets.newStyledComponents
+                                .Element.Badge
+                            }
+                            props={{
+                              children: tag,
+                              variant: "round info outline",
+                              size: "lg",
+                            }}
+                          />
+                        </CursorPointer>
+                      );
+                    })}
+                </TagContainer>
+              </div>
+              <div className="d-flex gap-3">
+                <div className="d-flex flex-column">
+                  <HeaderButtonsContainer>
+                    <Widget
+                      src={widgets.views.editableWidgets.upVoteButton}
+                      props={{
+                        isTest,
+                        authorForWidget,
+                        reactedElementData: articleToRenderData,
+                        widgets,
+                        disabled:
+                          !context.accountId ||
+                          (articleSbts.length > 0 &&
+                            !canLoggedUserCreateComment),
+                        articleSbts,
+                        upVotes: articleToRenderData.upVotes,
+                        callLibs,
+                        baseActions,
+                      }}
+                    />
+                    <Widget
+                      src={
+                        widgets.views.standardWidgets.newStyledComponents.Input
+                          .Button
+                      }
+                      props={{
+                        size: "sm",
+                        className: "info outline icon",
+                        children: <i className="bi bi-share"></i>,
+                        onClick: () =>
+                          handleShareButton(true, {
+                            type: "sharedArticleId",
+                            value: articleToRenderData.id,
+                          }),
+                      }}
+                    />
+                  </HeaderButtonsContainer>
+                  <Widget
+                    src={widgets.views.editableWidgets.reactions}
+                    props={{
+                      widgets,
+                      isTest,
+                      authorForWidget,
+                      elementReactedId: id,
+                      disabled:
+                        !context.accountId ||
+                        (articleSbts.length > 0 && !canLoggedUserCreateComment),
+                      sbtsNames: articleSbts,
+                      callLibs,
+                      baseActions,
+                    }}
+                  />
+                  {context.accountId == accountId && (
+                    <EditDeleteButtonsContainer>
+                      <Widget
+                        src={
+                          widgets.views.standardWidgets.newStyledComponents
+                            .Input.Button
+                        }
+                        props={{
+                          children: (
+                            <div className="d-flex justify-content-center align-items-center">
+                              <span className="mx-2">Edit</span>
+                              <i className="bi bi-pencil"></i>
+                            </div>
+                          ),
+                          className: `info outline mt-2`,
+                          onClick: () => handleEditArticle(articleToRenderData),
+                        }}
+                      />
+                      <Widget
+                        src={
+                          widgets.views.standardWidgets.newStyledComponents
+                            .Input.Button
+                        }
+                        props={{
+                          children: (
+                            <div className="d-flex justify-content-center align-items-center">
+                              <i className="bi bi-trash"></i>
+                            </div>
+                          ),
+                          className: `danger outline mt-2`,
+                          onClick: () =>
+                            handleDeleteArticle(articleToRenderData),
+                        }}
+                      />
+                    </EditDeleteButtonsContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          <BodyContainer className="col-12">
+            <PlatformCard>
+              <PlatformContent>
+                <ContentHeader>
+                  <ContentHeaderText>
+                    {articleToRenderData.title}
+                  </ContentHeaderText>
+                </ContentHeader>
+
+                <Widget
+                  src={widgets.views.standardWidgets.socialMarkdown}
+                  props={{
+                    text: displayedContent,
+                    onHashtag: (hashtag) => (
+                      <span
+                        key={hashtag}
+                        className="d-inline-flex"
+                        style={{ fontWeight: 500 }}
+                      >
+                        <a
+                          href={`https://near.social/${authorForWidget}/widget/${widgets.thisForum}?tagShared=${hashtag}`}
+                          target="_blank"
+                        >
+                          #{hashtag}
+                        </a>
+                      </span>
+                    ),
+                  }}
+                />
+                {state.sliceContent &&
+                  articleToRenderData.body.length > 1000 && (
+                    <Widget
+                      src={
+                        widgets.views.standardWidgets.newStyledComponents.Input
+                          .Button
+                      }
+                      props={{
+                        children: (
+                          <div className="d-flex justify-content-center align-items-center">
+                            <span className="mx-2">Show more</span>
+                            <i className="bi bi-chat-square-text-fill"></i>
+                          </div>
+                        ),
+                        size: "sm",
+                        className: "w-100",
+                        onClick: () => {
+                          State.update({ sliceContent: false });
+                        },
+                      }}
+                    />
+                  )}
+              </PlatformContent>
+            </PlatformCard>
+          </BodyContainer>
+          <CommentSection>
+            <NominationTitle>
+              <span>
+                <i className="bi bi-chat-square-dots-fill" /> Comments
+              </span>
+            </NominationTitle>
+
+            {state.showModal && (
+              <Widget
+                src={widgets.views.editableWidgets.addComment}
+                props={{
+                  article: articleToRenderData,
+                  widgets,
+                  isTest,
+                  isReplying: false,
+                  username: accountId,
+                  onCloseModal: () => State.update({ showModal: false }),
+                  callLibs,
+                  baseActions,
+                  // nomination_contract,
+                }}
+              />
+            )}
+            <Widget
+              src={
+                widgets.views.standardWidgets.newStyledComponents.Input.Button
+              }
+              props={{
+                children: (
+                  <div className="d-flex align-items-center justify-content-cente">
+                    <span className="mx-1">Add comment</span>
+                    <i className="bi bi-plus-lg"></i>
+                  </div>
+                ),
+                disabled:
+                  !context.accountId ||
+                  (articleSbts.length > 0 && !canLoggedUserCreateComment),
+                className: "info outline w-100 mt-4 mb-2",
+                onClick: () => {
+                  State.update({ showModal: true });
+                },
+              }}
+            />
+            {articleComments.map((data) => (
+              <Widget
+                src={widgets.views.editableWidgets.commentView}
+                props={{
+                  widgets,
+                  data,
+                  isTest,
+                  authorForWidget,
+                  isReply: false,
+                  canLoggedUserCreateComment: canLoggedUserCreateComment,
+                  articleSbts,
+                  callLibs,
+                  baseActions,
+                  sharedCommentId,
+                  articleToRenderData,
+                }}
+              />
+            ))}
+          </CommentSection>
+        </div>
+      </div>
+      <SecondContainer className="col-lg-3 col-sm-12">
+        <>
+          <ul className="nav nav-pills nav-fill">
+            {tabs.map(({ id, title, icon }, i) => (
+              <li className="nav-item" role="presentation" key={i}>
+                <Tab
+                  active={state.tabSelected === id}
+                  onClick={() => State.update({ tabSelected: id })}
+                >
+                  <i className={`${icon}`} />
+                  {title}
+                </Tab>
+              </li>
+            ))}
+          </ul>
+          <div>
+            {state.tabSelected == "generalInfo" && (
+              <DeclarationCard>
+                <SectionTitle className="mt-4 mb-3"></SectionTitle>
+                <div>
+                  <DescriptionSubtitle>Created by:</DescriptionSubtitle>
+                  <DescriptionInfoSpan>
+                    {articleToRenderData.authorProfile.name ??
+                      getShortUserName()}
+                  </DescriptionInfoSpan>
+                </div>
+                <div>
+                  <DescriptionSubtitle>Edited on:</DescriptionSubtitle>
+                  <DescriptionInfoSpan>{timeLastEdit + ""}</DescriptionInfoSpan>
+                </div>
+                <div>
+                  <DescriptionSubtitle>Edit versions:</DescriptionSubtitle>
+                  <DescriptionInfoSpan>
+                    {articleToRenderData.version}
+                  </DescriptionInfoSpan>
+                </div>
+                {articleSbts.length > 0 && (
+                  <div>
+                    <DescriptionSubtitle>
+                      SBT requiered to interact:
+                    </DescriptionSubtitle>
+                    {articleSbts.map((sbt) => {
+                      return <DescriptionInfoSpan>{sbt}</DescriptionInfoSpan>;
+                    })}
+                  </div>
+                )}
+              </DeclarationCard>
+            )}
+          </div>
+        </>
+      </SecondContainer>
+    </Container>
+    <CallLibrary>
+      {libSrcArray.map((src) => {
+        return callLibs(
+          src,
+          stateUpdate,
+          state.libsCalls,
+          { baseAction: baseActions.commentBaseAction },
+          "Article view"
+        );
+      })}
+    </CallLibrary>
   </>
 );

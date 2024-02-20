@@ -18,6 +18,7 @@ let {
   showCreateArticle,
   sbtWhiteList,
   sbts,
+  categories,
   handleShareButton,
   handleShareSearch,
   canLoggedUserCreateArticles,
@@ -214,6 +215,7 @@ return (
                     initialBody: "",
                     canLoggedUserCreateArticles,
                     sbts,
+                    categories,
                     baseActions,
                     handleOnCommitArticle,
                   }}
@@ -306,6 +308,7 @@ return (
                     authorForWidget,
                     handleShareButton,
                     sbtWhiteList,
+                    categories,
                     handleEditArticle,
                     callLibs,
                     baseActions,

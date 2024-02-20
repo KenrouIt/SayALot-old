@@ -15,6 +15,7 @@ const {
   sharedCommentId,
   allArticlesWithThisSBT,
   sbtWhiteList,
+  categories,
 } = props;
 
 if (!callLibs) {
@@ -266,6 +267,31 @@ const PlatInforHeadText = styled.p`
     font-weight: 500;
     line-height: 120%;
   `;
+
+const CategoryContainer = styled.div`
+  margin-top: 1rem;
+  margin-left: 1rem;
+  `;
+
+function getArticleCategoryColor() {
+  const articleCategory = categories.filter(
+    (cat) => cat.value === articleToRenderData.category
+  );
+
+  return articleCategory.color;
+}
+
+const CategoryColorIndicator = styled.i`
+  color: ${getArticleCategoryColor()};
+  margin-right: 0.3rem;
+`;
+
+const CategoryText = styled.span`
+    font-style: normal;
+    font-size: 12px;
+    line-height: 120%;
+    margin-bottom: 0;
+`;
 
 const PlatInfoHeadSeparator = styled.hr`
     height: 0px;
@@ -618,6 +644,12 @@ return (
                     },
                   }}
                 />
+                {articleToRenderData.category && (
+                  <CategoryContainer className="d-flex align-items-center">
+                    <CategoryColorIndicator className="bi bi-square-fill"></CategoryColorIndicator>
+                    <CategoryText>{articleToRenderData.category}</CategoryText>
+                  </CategoryContainer>
+                )}
                 <TagContainer>
                   {articleToRenderData.tags.length > 0 &&
                     articleToRenderData.tags.map((tag) => {

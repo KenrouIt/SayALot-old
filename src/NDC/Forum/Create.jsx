@@ -14,6 +14,7 @@ const {
   handlerStateUpdate,
   sbtWhiteList,
   sbts,
+  categories,
   canLoggedUserCreateArticles,
   callLibs,
   baseActions,
@@ -21,6 +22,10 @@ const {
 } = props;
 
 const libSrcArray = [widgets.libs.libArticle];
+
+const categoriesWithoutAllArticles = categories.filter(
+  (categ) => categ.value !== "All categories"
+);
 
 const errTextNoBody = "ERROR: no article Body",
   errTextNoId = "ERROR: no article Id",
@@ -32,6 +37,7 @@ State.init({
   functionsToCallByLibrary: {
     article: [],
   },
+  category: categoriesWithoutAllArticles[0],
 });
 
 function createStateUpdate(obj) {
@@ -67,6 +73,7 @@ function getArticleData() {
     tags: tagsArray ?? [],
     id: getRealArticleId(),
     sbts,
+    category: state.category,
   };
   return args;
 }
@@ -83,6 +90,7 @@ function onCommit(article) {
     // showCreatedArticle: true,
     showPreview: false,
     saving: false,
+    category: "Uncategorized",
   });
 
   if (!Array.isArray(article.tags)) article.tags = Object.keys(article.tags);
@@ -110,6 +118,12 @@ function getInitialMarkdownBody() {
       ? "Post content (markdown supported)"
       : state.initialBody;
   }
+}
+
+function handleCategorySelection(selectedCategory) {
+  State.update({
+    category: selectedCategory,
+  });
 }
 
 function createArticleListener() {
@@ -228,8 +242,10 @@ return (
                     navigation_id: null,
                     tags: tagsArray,
                     id: getRealArticleId(),
+                    category: state.category,
                     sbts,
                   },
+                  categories,
                   addressForArticles,
                   handleOpenArticle: () => {},
                   handleFilterArticles: () => {},
@@ -255,6 +271,23 @@ return (
                       filterText: (e) => e.target.value,
                       placeholder: "Post title (case-sensitive)",
                       editable: editArticleData,
+                    }}
+                  />
+                </div>
+                <div className="d-flex flex-column pt-3">
+                  <label for="inputCategory" className="small text-danger">
+                    {state.errorCategory}
+                  </label>
+                  <Widget
+                    src={
+                      widgets.views.standardWidgets.newStyledComponents.Input
+                        .Select
+                    }
+                    props={{
+                      label: "Select category",
+                      value: state.category,
+                      onChange: handleCategorySelection,
+                      options: categoriesWithoutAllArticles,
                     }}
                   />
                 </div>
