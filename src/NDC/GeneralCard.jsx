@@ -471,9 +471,9 @@ return (
                 !context.accountId ||
                 (articleSbts.length > 0 && !canLoggedUserCreateComment),
               articleSbts,
-              upVotes,
               callLibs,
               baseActions,
+              upVotes: data.upVotes,
             }}
           />
           <Widget

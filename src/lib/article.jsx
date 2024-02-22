@@ -36,7 +36,7 @@ const action = isTest ? testAction : prodAction;
 
 // type LibsCalls = Record<string, FunctionCall> // Key is lib name after lib.
 
-const libSrcArray = [widgets.libs.libSBT]; // string to lib widget // EDIT: set libs to call
+const libSrcArray = [widgets.libs.libSBT, widgets.libs.libUpVotes]; // string to lib widget // EDIT: set libs to call
 
 const imports = { notifications: ["getNotificationData"] };
 
@@ -392,6 +392,48 @@ function getArticleVersions(props) {
   return finalArticles;
 }
 
+function setUpVotes(articles) {
+  const newLibsCalls = Object.assign({}, state.libCalls);
+  if (!newLibsCalls.upVotes) {
+    logError("Key upVotes is not set in lib.", libName);
+  }
+
+  articles.forEach((article) => {
+    const isCallPushed =
+      newLibsCalls.upVotes.find((libCall) => {
+        return (
+          libCall.functionName === "getUpVotes" &&
+          libCall.props.id === article.id
+        );
+      }) !== undefined;
+    const isCallReturned = state[`getUpVotes-${article.id}`] !== undefined;
+
+    console.log("uv: ", article.id,`R: ${isCallReturned}`, `P: ${isCallPushed}`)
+
+    if (isCallPushed || isCallReturned) {
+      return;
+    }
+
+    newLibsCalls.upVotes.push({
+      functionName: "getUpVotes",
+      key: `upVotes-${article.id}`,
+      props: {
+        id: article.id ?? `${article.author}-${article.timeCreate}`,
+        sbtsNames: article.sbts ?? [],
+        isFromLibArticle: true,
+      },
+    });
+  });
+
+  console.log("newLibsCalls: ", newLibsCalls)
+  State.update({ libCalls: newLibsCalls });
+}
+function appendUpVotes(article) {
+  console.log("state: ", state)
+  article.upVotes = state[`getUpVotes-${article.id}`];
+  return article
+}
+
 function getArticles(props) {
   const { env, sbtsNames } = props;
 
@@ -423,9 +465,15 @@ function getArticles(props) {
 
   const finalArticles = filterValidArticles(lastEditionArticles);
 
+  setUpVotes(finalArticles);
+
+  const finalArticlesWithUpVotes = finalArticles.map(appendUpVotes)
+
+  // console.log("finalArticlesWithUpVotes: ", finalArticlesWithUpVotes)
+
   const finalArticlesMapped = {};
   sbtsNames.forEach((sbtName) => {
-    const sbtArticles = finalArticles.filter((article) => {
+    const sbtArticles = finalArticlesWithUpVotes.filter((article) => {
       if (!article.sbts) return false;
       return article.sbts.indexOf(sbtName) !== -1;
     });

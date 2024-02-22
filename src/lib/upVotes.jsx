@@ -289,31 +289,33 @@ function filterInvalidUpVotes(env, upVotes) {
 }
 
 function getUpVotes(props) {
-  const { sbtsNames: articleSbts, id } = props;
+  const { sbtsNames: articleSbts, id, isFromLibArticle } = props;
   // Call other libs
+
   const normUpVotes = getupVotesNormalized(id);
   if (!normUpVotes) return undefined;
-
+  
   const lastUpVotesAuthors = normUpVotes.map((upVote) => {
     return upVote.accountId;
   });
   setAreValidUsers(lastUpVotesAuthors, articleSbts);
-
+  
   lastUpVotesAuthors.forEach((accountId) => {
     resultFunctionsToCall = resultFunctionsToCall.filter((call) => {
       const discardCondition =
-        call.functionName === "getUpVotes" &&
-        state[`isValidUser-${accountId}`] !== undefined;
+      call.functionName === "getUpVotes" &&
+      state[`isValidUser-${accountId}`] !== undefined;
       return !discardCondition;
     });
   });
-
+  
   const finalUpVotes = filterValidUpVotes(normUpVotes, articleSbts);
   const finalUpVotesMapped = {};
-
+  
   articleSbts.forEach((sbt) => {
     finalUpVotesMapped[sbt] = finalUpVotes;
   });
+  // console.log("props: ", props)
 
   return finalUpVotesMapped;
 }

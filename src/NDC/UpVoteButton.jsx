@@ -58,7 +58,7 @@ let userVote = upVotesData.find((vote) => vote.accountId === context.accountId);
 let hasUserVoted = userVote !== undefined;
 
 function getUpVoteButtonClass() {
-  if (hasUserVoted) {
+  if (hasUserVoted) {ks
     return "info";
   } else {
     return "info outline";
